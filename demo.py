@@ -1,113 +1,90 @@
-# In[ ]:
 import cv2 as cv
 import numpy as np
-import scipy as sp
 import matplotlib.pyplot as plt
-import numba
+
+def check_motion(p1, p2):
+    # return sp.spatial.distance.cdist(p1, p2) > 2
+    return (p1 != p2).any()
+
+def threshold(frame):
+    x = frame[..., 1] <= 25
+    y = frame[..., 2] >= 240
+
+    return (x & y).astype(np.uint8) * 255
+
+def pre(frame):
+    frame = cv.GaussianBlur(frame, ksize=(3, 3), sigmaX=10)
+    frame = cv.erode(frame, np.ones((3, 3)))
+    frame = cv.dilate(frame, np.ones((5, 5)))
+
+    return frame
 
 
-video_path = '/home/daw/Desktop/goalilio/goals2.bin.mp4'
+video_path = 'project_cv_2.mov'
 
-frames = []
-hsv_vid = []
-
-# In[ ]:
 cap = cv.VideoCapture(video_path)
 
-bgr_vid = threshed = None
+video = []
+video_hsv = []
+# fourcc = cv.VideoWriter_fourcc(*'XVID')
+# out = cv.VideoWriter('output.avi',fourcc, 20.0, (640,480))
 
-print('we\'re here!')
+zs = np.empty((int(cap.get(4)), int(cap.get(3))))
+counter = 0
+hist = []
+while True:
+    ret, frame = cap.read()
+    counter += 1
+    if not ret:
+        break
 
-def bgr2hsv(video):
-    print(video.shape)
+    hsv_frame = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+    thsh = threshold(hsv_frame)
 
-    # video = video / 255
+    thsh = pre(thsh)
 
-    V = np.maximum.reduce(video, axis=-1)
+    circles = cv.HoughCircles(thsh[350:700, 250:750],
+                              cv.cv.CV_HOUGH_GRADIENT, 1,
+                              param1=5, param2=10,
+                              minDist=200, minRadius=13, maxRadius=20)
 
-    mn = np.minimum.reduce(video, axis=-1)
-    
-    S = ((V - mn) / (V)) * (V != 0)
-    
-    Vi = np.argmax(video, axis=-1)
-    x = (V - mn)
+    thsh = np.array([thsh, zs, zs]).transpose(1, 2, 0).copy()
 
-    Hr = 60*(video[..., 1] - video[..., 0]) / x
-    Hg = 120 + 60*(video[..., 0] - video[..., 2]) / x
-    Hb = 240 + 60*(video[..., 2] - video[..., 1]) / x
+    if circles is not None:
+        circles = circles[0]
+        circles[:, 0] += 250
+        circles[:, 1] += 350
+        hist += [circles[0][:2]]
+        for c in circles[:1]:
+            cv.circle(thsh, tuple(c[:2]), c[-1], (0, 0, 255), 3)
 
-    H = np.array([Hb, Hg, Hr]).transpose(1, 2, 3, 0)
-
-    # Vi = Vi.reshape((Vi.shape[0], Vi.shape[1], Vi.shape[2], 1))
-
-    
-    # print(Vi.max(), Vi.min())
-    print(Vi.shape, H.shape)
-
-    sh = H.shape
-    H = H.reshape(-1, 3)
-    Vi = Vi.reshape(-1, 1)
-    H = H[Vi]
-
-    # h = input()
-
-    H = Vi.choose(H)
-
-    rv = np.array([H, S, V]).transpose(3, 0, 1, 2)
-
-    return rv
-
-@numba.jit
-def cvtColor(video, last, dst, *args, **kwds):
-    if kwds.has_key('dst'):
-        rv = kwds['dst']
-    else:
-        rv = np.empty(video.shape[:-1] + (last,))
-    
-    for i, frame in enumerate(video):
-        cv.cvtColor(frame, dst=rv[i], *args, **(kwds))
-    
-    return rv
-
-fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(6, 6))
-axs[0].set_title('Original')
-axs[1].set_title('segmented')
-
-plt.ion()
-
-def main():
-    global frames, cap, bgr_vid, hsv_vid, threshed
-    # In[ ]:
-    while True:
-        ret, frame = cap.read()
-
-        if not ret:
-            break
-        
-        frame = frame[100:750, 200:850]
-        hsv_frame = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-        frames += [frame]
-        hsv_vid += [hsv_frame]
-        axs[0].imshow(frame)
-        axs[1].imshow(hsv_frame)
-        plt.pause(0.05)
+        # subs = cv.BackgroundSubtractorMOG2()
+    if len(hist) > 1:
+        if (check_motion(hist[-1], hist[-2])):
+            # x1, y1 = hist[-3]
+            # x2, y2 = hist[-1]
+            p1 = hist[-2]
+            p2 = hist[-1]
+            p1 = p2 + (p2 - p1)*4
+            cv.line(thsh, tuple(p2), tuple(p1), (0, 255, 0), 2)
+            cv.line(frame, tuple(p2), tuple(p1), (150, 0, 240), 2)
 
 
-    # print(len(frames))
-    cap.release()
+    video += [frame]
+    video_hsv += [hsv_frame]
 
-    # In[ ]:
-    bgr_vid = np.array(frames[:-2])
-    hsv_vid = np.array(hsv_vid[:-2])
+    cv.imshow('Source', frame)
+    cv.imshow('Thresholded', thsh)
 
+    if cv.waitKey(1) == 27:
+        break
 
-    # In[ ]:
-    print('Got HSV')
+cap.release()
 
-    # In[ ]:
-    th_s = hsv_vid[..., 1] <= 15
-    th_v = hsv_vid[..., 2] >= 240
-    threshed = th_s & th_v
-    threshed = threshed * 255
+cv.destroyAllWindows()
 
-main()
+video     = np.array(video    [:-2])
+
+video_hsv = np.array(video_hsv[:-2])
+
+print(hsv_frame.shape)
