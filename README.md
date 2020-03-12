@@ -1,5 +1,8 @@
 # Fundamentals of Computer Vision CSCE xxxx
 
+## Offline Contributors
+- **_Mohamed El Daw_**, classmate and groupmate.
+
 ## Demo
 
 ### Pipeline
