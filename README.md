@@ -1,8 +1,8 @@
 # Fundamentals of Computer Vision CSCE xxxx
 
-# Project
+## Demo
 
-## Pipeline
+### Pipeline
 
 1. We work frame-by-frame
 1. Convert each frame to the HSV color space and threshold the frames (in effect, the whole video) to extract the whites in the video according to the following values:
